@@ -55,6 +55,7 @@ class Intro:
     HELP = ["strzałki: ruch i skok",
             "w dół: teleport",
             "spacja: strzał",
+            "p: pauza",
             "f1: informacje"]
 
     def __init__(self):
@@ -140,6 +141,41 @@ class Intro:
             surface.blit(text, ((surface.get_width() - text.get_width()) // 2, y))
             y += 18
         pygame.display.flip()
+
+    ENDING = ["gratulacje",
+              "",
+              "ukończyłeś",
+              "wszystkie poziomy"]
+
+    def ending(self):
+        """Shown after the last level. Any key returns to the menu."""
+        clock = pygame.time.Clock()
+        sound.start_music()
+        pygame.event.get()
+        t = 0
+        done = False
+        while not done:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    gl.quit_requested = True
+                    done = True
+                elif event.type == pygame.KEYDOWN and t > 20:
+                    done = True
+            surface = gl.window
+            surface.fill(pygame.Color(0, 0, 0))
+            self.draw_logo(surface, t)
+            y = 190
+            for i, line in enumerate(self.ENDING):
+                wave = lambda n, i=i: 4 * math.sin((t + n * 2 + i * 5) * 0.3)
+                self.small.draw_centered(surface, line, y, 0, wave)
+                y += 30
+            self.draw_floor(surface, 400)
+            self.draw_hero(surface, 400 - 2 * gl.SPRITE_Y)
+            pygame.display.flip()
+            sound.update_music()
+            t += 1
+            clock.tick(20)
+        sound.stop_music()
 
     def run(self):
         clock = pygame.time.Clock()

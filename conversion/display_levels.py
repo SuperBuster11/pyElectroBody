@@ -1,108 +1,69 @@
-import json
-import png
+"""
+Render whole levels (16x16 screens) into big PNG maps.
+
+Usage: python display_levels.py [data_folder] [output_folder]
+Defaults: ../data -> ../maps (next to this script). Requires Pillow.
+"""
+
 import os
-import copy
 import sys
+import json
 import glob
+from PIL import Image
 
-folder  = r"D:\PyEB\conversion\newdata"
-names = []
-screens = []
-sprites = [None] * 128
+HERE = os.path.dirname(os.path.abspath(__file__))
+TILE = 24  # original sprite size in pixels
+SCREEN_W, SCREEN_H = 13, 8  # screen size in tiles
+TY = 16  # screen rows to render
 
-def load_sprite(filename):
-    filename = filename.encode('ascii')
-    if os.path.exists(filename):
-        r = png.Reader(filename)
-        sprite = r.asRGBA()
-        assert sprite[0] == 24
-        assert sprite[1] == 24
-        return list(sprite[2])
-    else:
-        return None
 
-def load_sprites(set1, set2):
-    global sprites
-    print "Loading sprite sets: %s, %s" % (set1, set2)
-    for sprite in range(1,128):
-        snum = (sprite, sprite - 64)[sprite >= 64]
-        if sprite < 64:
-            sfilebase = os.path.join(folder, set1)
-            sfilebase = os.path.join(sfilebase, set1)
-            snum = sprite
-        else:
-            sfilebase = os.path.join(folder, set2)
-            sfilebase = os.path.join(sfilebase, set2)
-            snum = sprite - 64
-        sfile = sfilebase + "_%02d.png" % snum
-        sprites[sprite] = load_sprite(sfile)
+def load_sprites(folder, set1, set2):
+    print("Loading sprite sets: %s, %s" % (set1, set2))
+    sprites = [None] * 128
+    for sprite in range(1, 128):
+        set_name, number = (set1, sprite) if sprite < 64 else (set2, sprite - 64)
+        path = os.path.join(folder, set_name, "%s_%02d.png" % (set_name, number))
+        if os.path.exists(path):
+            sprites[sprite] = Image.open(path).convert("RGBA")
+    return sprites
 
-def load_level(filename):
-    f = open(filename, "rt")
-    level = json.load(f, encoding='ascii')
-    print "Loading level:", filename
-    global names, screens
-    names = level["names"]
-    screens = level["screens"]
-    load_sprites(names[0], names[1])
 
-def combine_screen_layers(s):
-    screen = screens[s]
-    line = [0] * (13 * 24 * 3)
-    png_data = []
-    for i in range(8 * 24):
-        png_data.append(copy.deepcopy(line))
-    if not screen:
-        sys.stdout.write("-")
-    else:
-        sys.stdout.write("+")
-        for layer in range(4):
-            if screen[layer]:
-                for y in range(8):
-                    for x in range(13):
-                        o = screen[layer][y * 13 + x]
-                        sprite = sprites[o]
+def render_screen(screen, sprites):
+    image = Image.new("RGBA", (SCREEN_W * TILE, SCREEN_H * TILE), (0, 0, 0, 255))
+    if screen:
+        for layer in screen:
+            if layer:
+                for y in range(SCREEN_H):
+                    for x in range(SCREEN_W):
+                        sprite = sprites[layer[y * SCREEN_W + x]]
                         if sprite:
-                            for r in range(24):
-                                row = sprite[r]
-                                for c in range(24):
-                                    dc = c * 4
-                                    if row[dc + 3] != 0:
-                                        px = x * 24 * 3 + c * 3
-                                        py = y * 24 + r
-                                        png_data[py][px + 0] = row[dc + 0]
-                                        png_data[py][px + 1] = row[dc + 1]
-                                        png_data[py][px + 2] = row[dc + 2]
-    if ((s + 1) % 16 == 0):
-        print
-    return png_data
+                            image.alpha_composite(sprite, (x * TILE, y * TILE))
+    return image
 
-TY = 16
+
+def render_level(filename, folder, output):
+    print("Loading level:", filename)
+    with open(filename, "rt") as f:
+        level = json.load(f)
+    sprites = load_sprites(folder, *level["names"])
+    width, height = SCREEN_W * TILE, SCREEN_H * TILE
+    big = Image.new("RGB", (16 * width, TY * height))
+    for s in range(TY * 16):
+        screen = render_screen(level["screens"][s], sprites)
+        big.paste(screen.convert("RGB"), ((s % 16) * width, (s // 16) * height))
+    name = os.path.splitext(os.path.basename(filename))[0]
+    big.save(os.path.join(output, name + ".png"))
+    print("Written:", name + ".png")
+
 
 def main():
-    levels = glob.glob(os.path.join(folder, "*.dat"))
-    for level in levels:
-        png_screens = []
-        lname = os.path.splitext(os.path.split(level)[1])[0]
-        load_level(level)
-        print "Processing screens..."
-        for s in range(TY * 16):
-            png_screens.append(combine_screen_layers(s))
-        print "Preparing big image data..."
-        png_data = []
-        for srow in range(24 * 8 * TY):
-            png_data.append([])
-            y = srow / (24 * 8)
-            prow = srow % (24 * 8)
-            for x in range(16):
-                data = png_screens[y * 16 + x][prow]
-                png_data[srow].extend(data)
-        print "Writing %s file..." % (lname + ".png")
-        f = open(lname + ".png", "wb")
-        w = png.Writer(width = 24 * 13 * 16, height = 24 * 8 * TY, alpha = False)
-        w.write(f, png_data)
-        f.close()
-    print "Done."
+    folder = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "data")
+    output = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "maps")
+    os.makedirs(output, exist_ok=True)
+    for filename in sorted(glob.glob(os.path.join(folder, "*.ebl"))):
+        render_level(filename, folder, output)
+    print("Done.")
+
 
 if __name__ == '__main__':
     main()

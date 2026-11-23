@@ -335,7 +335,9 @@ class PlayerEntity(ga.FSM, ga.Entity):
         sp = copy.copy(start_pos)
         self.teleport_target = None
         sn = gl.screen_manager.get_screen_number()
-        while not self.teleport_target:
+        for _ in range(257):  # whole level at most - avoid endless search
+            if self.teleport_target:
+                break
             tp = {}
             screen = gl.screen_manager.inspect_screen(sn)
             if screen:
@@ -348,8 +350,12 @@ class PlayerEntity(ga.FSM, ga.Entity):
                     if y in tp:
                         self.teleport_target = (sn, XY(sp.x, y))
                         break
-            sp.y = (gl.SCREEN_Y + 1) * gl.SPRITE_Y
-            sn = (sn - 16) % 256
+            if not self.teleport_target:
+                sp.y = (gl.SCREEN_Y + 1) * gl.SPRITE_Y
+                sn = (sn - 16) % 256
+
+    def is_shootable(self):
+        return False
 
     def is_alive(self):
         return self.state != self.state_dead
@@ -369,6 +375,11 @@ class PlayerEntity(ga.FSM, ga.Entity):
                 cp.get_position().x != position.x or
                 cp.get_position().y != position.y):
             cp.update(level, screen, XY.from_self(position))
+            for scr in gl.level.get_screens():
+                for other in (scr.active if scr else []):
+                    if isinstance(other, ga.Checkpoint):
+                        other.frame = 1  # inactive
+            obj.frame = 0  # active
             di.info_lines.add("punkt kontrolny")
             sound.play("checkp")
 
@@ -421,6 +432,7 @@ class PlayerEntity(ga.FSM, ga.Entity):
             self.counter = 25
             self.move_vector = XY(0, 0)
             self.temp = 0
+            self.select_weapon(0)  # all batteries are lost (original rule)
             di.info_lines.add("zginąłeś!")
             return
         self.counter -= 1
@@ -501,9 +513,11 @@ class PlayerEntity(ga.FSM, ga.Entity):
                     self.inc_power()
                     obj.vanish()  # remove battery from the map
                 elif touch_type == 2:
-                    if self.controller.down:
+                    if self.controller.down and self.state in (self.state_stand,
+                                                               self.state_move):
                         self.find_teleport_target(obj.get_position())
-                        self.new_state(self.state_teleport_out)
+                        if self.teleport_target:
+                            self.new_state(self.state_teleport_out)
                     # teleport
                     pass
                 elif touch_type == 3:
@@ -677,7 +691,12 @@ class PlayerEntity(ga.FSM, ga.Entity):
                 elif self.ammo == 2:
                     sound.play("warning")
             else:
-                sound.play("warning2")  # weapon overheated
+                # weapon overheated - one battery is lost (original rule)
+                self.select_weapon(self.power - 1)
+                self.temp = 1 if self.power else 0
+                self.cooldown = 4
+                di.info_lines.add("przegrzanie broni - tracisz baterię")
+                sound.play("warning2")
 
 
 #noinspection PyArgumentEqualDefault
@@ -688,6 +707,10 @@ class Projectile(ga.Entity):
         self.sprites = gl.weapons.weapon[type].anims
         self.frames = gl.weapons.weapon[type].frames
         self.step = 0
+        self.hits = set()  # objects already destroyed by this shot
+
+    def is_shootable(self):
+        return False
 
     def update(self):
         self.frame = (self.frame + 1) % len(self.sprites)
@@ -701,11 +724,26 @@ class Projectile(ga.Entity):
         me = self.get_abs_bbox()
         if self.type[0] == "5":
             me.h += gl.SPRITE_Y  # double height weapon
+        # weapons 4 and 5 (lasers) go through everything they destroy
+        piercing = self.type[0] in "45"
         for obj in list(screen.active):
-            if isinstance(obj, ga.Enemy) and me.colliderect(obj.get_abs_bbox()):
-                obj.hit()
-                self.vanish()
-                return
+            if obj is self or not obj.is_shootable():
+                continue
+            if not me.colliderect(obj.get_abs_bbox()):
+                continue
+            if obj.is_destroyable():
+                obj.destroy()
+                self.hits.add(obj)
+                if piercing:
+                    continue
+            elif obj in self.hits:
+                continue
+            else:
+                # indestructible target stops the shot
+                ga.add_explosion(self.get_position())
+                sound.play("xplosion")
+            self.vanish()
+            return
         side = "L" if self.step > 0 else "R"
         for obj in screen.collisions:
             if me.colliderect(obj.get_abs_bbox()) and obj.get_sides()[side]:

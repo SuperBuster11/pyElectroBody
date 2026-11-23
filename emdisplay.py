@@ -93,7 +93,7 @@ class DiskInfo:
         self.disks = 0
 
     def set_value(self, disks):
-        self.disks = disks % 4
+        self.disks = min(disks, 3)
 
     def display(self):
         if self.disks:

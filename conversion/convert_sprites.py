@@ -1,16 +1,19 @@
-import mmap
+"""
+Convert original Electro Body sprite files (*.ggs) to PNG images
+and JSON sprite set descriptions (*.ebs).
+
+Usage: python convert_sprites.py [source_folder] [destination_folder]
+Defaults: olddata -> newdata (next to this script). Requires Pillow.
+"""
+
 import os
-import png
+import sys
 import glob
 import json
 import struct
+from PIL import Image
 
-class MyError(Exception):
-    def __init__(self, message):
-        self.message = message
-
-    def __str__(self):
-        return repr(self.message)
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 palette = [(0, 0, 0), (0, 0, 42), (0, 42, 0), (0, 42, 42), (42, 0, 0), (42, 0, 42), (42, 21, 0), (42, 42, 42),
 (21, 21, 21), (21, 21, 63), (21, 63, 21), (21, 63, 63), (63, 21, 21), (63, 21, 63), (63, 63, 21), (63, 63, 63),
@@ -45,169 +48,116 @@ palette = [(0, 0, 0), (0, 0, 42), (0, 42, 0), (0, 42, 42), (42, 0, 0), (42, 0, 4
 (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0),
 (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
 
-#extern struct sfh {
-#  byte header  [32];
-#  byte V16_pal [16];
-#  byte V32_pal [32];
-#  byte params  [16];
-#} sprite_file_header;
 
-class SpriteFileHeader:
-    def __init__(self):
-        self.header = ""
-        self.V16_pal = ""
-        self.V32_pal = ""
-        self.params = ""
+class Reader:
+    """Sequential reader of a bytes buffer."""
+    def __init__(self, data):
+        self.data = data
+        self.pos = 0
 
-    def read(self, mapping):
-        self.header = mapping.read(32)
-        self.V16_pal = mapping.read(16)
-        self.V32_pal = mapping.read(32)
-        self.params = mapping.read(16)
+    def read(self, size):
+        chunk = self.data[self.pos:self.pos + size]
+        self.pos += size
+        return chunk
 
-#extern struct spd {
-#  byte future [8];
-#  byte def [288];
-#  byte VGA_colors [48];
-#  byte EGA_colors [32];
-#  byte CGA_colors [32];
-#  byte V16_colors [32];
-#  byte V32_colors [48];
-#} sprite_definition;
+
+# struct sfh {
+#   byte header  [32];
+#   byte V16_pal [16];
+#   byte V32_pal [32];
+#   byte params  [16];
+# } sprite_file_header;
+
+# struct spd {
+#   byte future [8];
+#   byte def [288];         - 24x24 pixels, 4 bits per pixel
+#   byte VGA_colors [48];   - palette index for each of 16 colors
+#   byte EGA_colors [32];
+#   byte CGA_colors [32];
+#   byte V16_colors [32];
+#   byte V32_colors [48];
+# } sprite_definition;
 
 class SpriteDefinition:
     def __init__(self):
-        self.future = ""
-        self.packed_pixels = ""
-        self.VGA_colors = ""
-        self.EGA_colors = ""
-        self.CGA_colors = ""
-        self.V16_colors = ""
-        self.V32_colors = ""
-        self.pixels = []
         self.index = 0
+        self.pixels = []
 
-    def palette_lookup(self, index):
-        pindex = ord(self.VGA_colors[index])
-        alpha = (255, 0)[pindex == 0]
+    def palette_lookup(self, vga_colors, index):
+        pindex = vga_colors[index]
+        alpha = 0 if pindex == 0 else 255
         color = palette[pindex]
-        final = (color[0] * 4, color[1] * 4, color[2] * 4, alpha)
-        return final
+        return (color[0] * 4, color[1] * 4, color[2] * 4, alpha)
 
-    def read(self, mapping):
-        self.future= mapping.read(8)
-        self.packed_pixels= mapping.read(288)
-        self.VGA_colors= mapping.read(48)
-        self.EGA_colors= mapping.read(32)
-        self.CGA_colors= mapping.read(32)
-        self.V16_colors= mapping.read(32)
-        self.V32_colors= mapping.read(48)
-        for pp in self.packed_pixels:
-            pv = (ord(pp) >> 4) & 0x0F
-            pixel = self.palette_lookup(pv)
-            self.pixels.append(pixel)
-            pv = ord(pp) & 0x0F
-            pixel = self.palette_lookup(pv)
-            self.pixels.append(pixel)
+    def read(self, reader):
+        reader.read(8)  # future
+        packed_pixels = reader.read(288)
+        vga_colors = reader.read(48)
+        reader.read(32 + 32 + 32 + 48)  # EGA, CGA, V16 and V32 colors
+        for pp in packed_pixels:
+            self.pixels.append(self.palette_lookup(vga_colors, (pp >> 4) & 0x0F))
+            self.pixels.append(self.palette_lookup(vga_colors, pp & 0x0F))
 
-    def get_pixels(self):
-        return self.pixels
+    def image(self):
+        img = Image.new("RGBA", (24, 24))
+        img.putdata(self.pixels)
+        return img
 
-    def get_index(self):
-        return self.index
 
 class GGSFile:
     def __init__(self):
-        self.header = SpriteFileHeader()
-        self.file = None
-        self.mapping = None
-        self.status_table = ""
-        self.size_table = ""
-        self.future_size = ""
+        self.status_table = b""
+        self.size_table = b""
         self.definitions = []
 
-    def open(self, filename):
-        try:
-            self.file = open(filename, "r+b")
-            self.mapping = mmap.mmap(self.file.fileno(), 0)
-        except IOError:
-            raise MyError("Error: cannot open sprite file.")
-
-    def get_number(self):
-        return len(self.definitions)
-
-    def read(self):
-        self.header.read(self.mapping)
-        self.status_table = self.mapping.read(512)
-        self.size_table = self.mapping.read(256)
-        self.future_size = self.mapping.read(2)
-        skip = ord(self.future_size[0]) + (ord(self.future_size[1]) << 8)
-        skip = self.mapping.read(skip)
+    def read(self, filename):
+        with open(filename, "rb") as f:
+            reader = Reader(f.read())
+        reader.read(32 + 16 + 32 + 16)  # header
+        self.status_table = reader.read(512)
+        self.size_table = reader.read(256)
+        skip = struct.unpack("<H", reader.read(2))[0]
+        reader.read(skip)
         for i in range(64):
-            used = self.mapping.read(1)
-            if ord(used) != 0xFF:
-                sprite_definition = SpriteDefinition()
-                sprite_definition.read(self.mapping)
-                sprite_definition.index = i
-                self.definitions.append(sprite_definition)
+            used = reader.read(1)
+            if used and used[0] != 0xFF:
+                sprite = SpriteDefinition()
+                sprite.read(reader)
+                sprite.index = i
+                self.definitions.append(sprite)
             else:
                 self.definitions.append(None)
 
-    def get_sprites(self):
-        return self.definitions
-
     def get_status_table(self):
-        return struct.unpack("512B", self.status_table)
+        return list(struct.unpack("512B", self.status_table))
 
     def get_size_table(self):
-        return struct.unpack("256B", self.size_table)
+        return list(struct.unpack("256B", self.size_table))
+
 
 def main():
-    try:
-        folder = r"D:\PyEB\conversion\olddata"
-        destination = r"D:\PyEB\conversion\newdata"
-        all_files = glob.glob(os.path.join(folder, "*.ggs"))
-        for filename in all_files:
-            fname = os.path.split(filename)[1]
-            fname = os.path.splitext(fname)[0]
-            sprites_file = GGSFile()
-            sprites_file.open(os.path.join(folder, filename))
-            sprites_file.read()
-            print "File '%s' opened." % filename
-            print "%d sprites loaded." % sprites_file.get_number()
-            sprites = sprites_file.get_sprites()
-            print "Converting and writing sprites and data..."
-            sprites_path = os.path.join(destination, fname)
-            if not os.path.exists(sprites_path):
-                os.mkdir(sprites_path)
-            f = open(os.path.join(sprites_path, "%s.ebs" % fname), "wt")
-            used = []
-            for sprite in sprites:
-                used.append((True, False)[sprite is None])
-            jdata = {"status table" : sprites_file.get_status_table(),
-                     "size table" : sprites_file.get_size_table(),
-                     "used table" : used}
-            json.dump(jdata, f, sort_keys = True)
-            f.close()
-            for sprite in sprites:
-                if sprite is not None:
-                    pixels = sprite.get_pixels()
-                    png_data = []
-                    for row in range(24):
-                        png_data.append([])
-                        for col in range(24):
-                            for color in pixels[row * 24 + col]:
-                                png_data[row].append(color)
-                    name = "%s_%02d.png" % (fname, sprite.get_index())
-                    sprite_filename = os.path.join(sprites_path, name)
-                    f = open(sprite_filename, "wb")
-                    w = png.Writer(width = 24, height = 24, alpha = True)
-                    w.write(f, png_data)
-                    f.close()
-            print "File processed successfully."
-        print "All done."
-    except MyError as error:
-        print error
+    folder = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "olddata")
+    destination = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "newdata")
+    os.makedirs(destination, exist_ok=True)
+    for filename in sorted(glob.glob(os.path.join(folder, "*.ggs"))):
+        fname = os.path.splitext(os.path.basename(filename))[0]
+        sprites_file = GGSFile()
+        sprites_file.read(filename)
+        sprites = sprites_file.definitions
+        print("File '%s': %d sprites." % (filename, 64 - sprites.count(None)))
+        sprites_path = os.path.join(destination, fname)
+        os.makedirs(sprites_path, exist_ok=True)
+        jdata = {"status table": sprites_file.get_status_table(),
+                 "size table": sprites_file.get_size_table(),
+                 "used table": [sprite is not None for sprite in sprites]}
+        with open(os.path.join(sprites_path, "%s.ebs" % fname), "wt") as f:
+            json.dump(jdata, f, sort_keys=True)
+        for sprite in sprites:
+            if sprite is not None:
+                name = "%s_%02d.png" % (fname, sprite.index)
+                sprite.image().save(os.path.join(sprites_path, name))
+    print("All done.")
+
 
 if __name__ == '__main__':
     main()

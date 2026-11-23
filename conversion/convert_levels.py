@@ -1,16 +1,51 @@
-import mmap
+"""
+Convert original Electro Body level files (*.ggc) to JSON (*.ebl).
+
+Usage: python convert_levels.py [source_folder] [destination_folder]
+Defaults: olddata -> newdata (next to this script).
+"""
+
 import os
+import sys
 import json
 import struct
 import glob
 
-#struct
-#{
-#  byte gge_header [32];
-#  byte name       [2][9];
-#  byte param      [16];
-#  byte map        [256];
-#} header;
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# struct
+# {
+#   byte gge_header [32];
+#   byte name       [2][9];
+#   byte param      [16];
+#   byte map        [256];
+# } header;
+
+
+class Reader:
+    """Sequential reader of a bytes buffer (replaces mmap)."""
+    def __init__(self, data):
+        self.data = data
+        self.pos = 0
+
+    def read(self, size):
+        chunk = self.data[self.pos:self.pos + size]
+        self.pos += size
+        return chunk
+
+    def size(self):
+        return len(self.data)
+
+    def tell(self):
+        return self.pos
+
+
+def set_name(raw):
+    """Sprite set name: zero terminated ASCII string."""
+    if raw[-1] == 0:
+        raw = raw[:raw.index(0)]
+    return raw.decode("ascii").lower()
+
 
 class LevelFile:
     def __init__(self):
@@ -23,29 +58,23 @@ class LevelFile:
         self.screens = []
 
     def open(self, filename):
-        self.file = open(filename, "r+b")
-        self.mapping = mmap.mmap(self.file.fileno(), 0)
+        with open(filename, "rb") as f:
+            self.mapping = Reader(f.read())
 
     def read(self):
         assert self.mapping is not None
         self.header = self.mapping.read(32)
-        self.names.append(self.mapping.read(9))
-        self.names[0] = (self.names[0], self.names[0]
-                         [:self.names[0].index('\x00')])[self.names[0][-1] == '\x00']
-        self.names.append(self.mapping.read(9))
-        self.names[1] = (self.names[1], self.names[1]
-                         [:self.names[1].index('\x00')])[self.names[1][-1] == '\x00']
-        self.names[0] = self.names[0].lower()
-        self.names[1] = self.names[1].lower()
-        self.params = struct.unpack("16B",self.mapping.read(16))
+        self.names.append(set_name(self.mapping.read(9)))
+        self.names.append(set_name(self.mapping.read(9)))
+        self.params = list(struct.unpack("16B", self.mapping.read(16)))
         self.map = self.mapping.read(256)
         self.map = list(struct.unpack("256B",self.map))
         self.future = self.mapping.read(2)
-        self.future = struct.unpack("H",self.future)[0]
+        self.future = struct.unpack("<H", self.future)[0]
         self.future = self.mapping.read(self.future)
         for screen_index in range(256):
             if self.map[screen_index] != 0:
-                offsets_data = struct.unpack("4H",self.mapping.read(8))
+                offsets_data = struct.unpack("<4H", self.mapping.read(8))
                 offsets = []
                 for ofs in offsets_data:
                     offsets.append((None ,ofs - 2048)[ofs != 0])
@@ -114,23 +143,22 @@ class LevelFile:
         return self.params
 
 def main():
-    folder = r"D:\PyEB\conversion\olddata"
-    destination = r"D:\PyEB\conversion\newdata"
-    all_files = glob.glob(os.path.join(folder, "*.ggc"))
-    for filename in all_files:
-        fname = os.path.splitext(os.path.split(filename)[1])[0]
-        print "Processing level file:", fname
+    folder = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "olddata")
+    destination = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "newdata")
+    os.makedirs(destination, exist_ok=True)
+    for filename in sorted(glob.glob(os.path.join(folder, "*.ggc"))):
+        fname = os.path.splitext(os.path.basename(filename))[0]
+        print("Processing level file:", fname)
         level = LevelFile()
         level.open(filename)
         level.read()
         # write as JSON data
-        jdata = {"params" : level.get_params(),
-                 "names" : level.get_names(),
-                 "screens" : level.get_screens()}
-        f = open(os.path.join(destination, "%s.ebl" % fname), "wt")
-        json.dump(jdata, f, sort_keys = True)
-        f.close()
-    print "Done."
+        jdata = {"params": level.get_params(),
+                 "names": level.get_names(),
+                 "screens": level.get_screens()}
+        with open(os.path.join(destination, "%s.ebl" % fname), "wt") as f:
+            json.dump(jdata, f, sort_keys=True)
+    print("Done.")
 
 
 if __name__ == '__main__':

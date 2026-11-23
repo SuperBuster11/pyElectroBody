@@ -47,6 +47,7 @@ jeśli masz stare `pygame`, usuń je poleceniem `pip uninstall pygame`.
 | ↑ | skok |
 | ↓ | wejście do teleportu (stojąc na nim) |
 | Spacja | strzał (w menu: start) |
+| P | pauza |
 | Esc | powrót do menu / wyjście |
 | F1 | informacje deweloperskie |
 
@@ -55,19 +56,35 @@ Klawisze deweloperskie: `1`–`8` wczytanie poziomu, `Shift+0`–`Shift+5` wybó
 
 ## Zasady
 
-Zbieraj baterie (silniejsza broń) i 3 dyskietki, potem stań na wyjściu (niebieski pas
-w podłodze), żeby przejść do następnego poziomu. Przeciwnicy, ich pociski oraz
-elementy elektryczne i kolce zabijają; po śmierci wracasz do ostatniego punktu
-kontrolnego.
+Zbieraj baterie (każda wzmacnia broń, jest 5 poziomów broni) i 3 dyskietki, potem stań
+na wyjściu (niebieski pas w podłodze), żeby przejść do następnego poziomu. Po 8. poziomie
+gra się kończy.
+
+- Strzelaj z wyczuciem: przegrzana broń (lewy wskaźnik) traci jedną baterię.
+- Pociski niszczą przeciwników oraz część działek, monitorów i barier elektrycznych.
+  Bronie 4 i 5 (lasery) przelatują przez to, co niszczą.
+- Przeciwnicy, pociski, łuki elektryczne i kolce zabijają. Po śmierci wracasz do
+  ostatniego punktu kontrolnego (zapala się po dotknięciu) i tracisz wszystkie baterie.
 
 ## Stan prac
 
 Działa: intro z oryginalnym logo i muzyką, wszystkie 8 poziomów, animacje otoczenia,
 chodzenie, skoki, kolizje, teleporty, baterie, dyskietki, punkty kontrolne, wyjście,
-strzelanie, ruch i strzały przeciwników, działka, rakiety, śmierć i odradzanie, dźwięki.
+strzelanie i niszczenie obiektów, ruch i strzały przeciwników, działka, rakiety, śmierć
+i odradzanie, pauza, ekran końca gry, dźwięki.
 
 Przeszkody: działka strzelające w stałym rytmie, rakiety spadające z sufitu lub
 wylatujące z podłogi, gdy przechodzisz obok, łuki elektryczne i kolce, przepaść
 na ekranach oznaczonych „podłoga zabija”.
 
-Do zrobienia: ekran końca gry.
+## Narzędzia (folder `conversion`)
+
+Skrypty, którymi zamieniono pliki oryginału (`conversion/olddata`) na format tej wersji.
+Do gry nie są potrzebne. Wymagają Pillow (`pip install pillow`).
+
+- `convert_sprites.py`: grafiki `*.ggs` na PNG i `*.ebs`,
+- `convert_levels.py`: poziomy `*.ggc` na `*.ebl`,
+- `convert_sounds.py`: dźwięki `*.u8` na WAV,
+- `display_levels.py`: rysuje mapy całych poziomów do folderu `maps`.
+
+`sprite_info.py` to podgląd grafik i ich parametrów (wymaga pygame-ce).

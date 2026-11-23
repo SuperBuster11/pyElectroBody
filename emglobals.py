@@ -64,6 +64,7 @@ info = None  # data class for info sprites
 counter = 0 # +1 every loop
 disks = 0 # number of disks collected
 level_completed = False  # set when the player leaves through the exit
+game_completed = False  # set after the last level
 quit_requested = False  # window closed - quit the whole program
 
 # random numbers for active screen

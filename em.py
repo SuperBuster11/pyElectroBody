@@ -35,7 +35,11 @@ class Gameplay:
         self.screens_map = None
         self.deferred = []
         # keys reacting once per key press
+        self.paused = False
+        self.pause_font = intro.SpriteFont(40)
         self.key_handlers = {pygame.K_ESCAPE: self.on_k_escape,
+                             pygame.K_p: self.on_k_pause,
+                             pygame.K_PAUSE: self.on_k_pause,
                              pygame.K_TAB: self.on_k_tab,
                              pygame.K_F1: self.on_k_f1,
                              pygame.K_LEFT: self.on_k_left,
@@ -158,6 +162,9 @@ class Gameplay:
             gl.current_level = number - 1
             self.load_level()
 
+    def on_k_pause(self):
+        self.paused = not self.paused
+
     def on_k_escape(self):
         gl.loop_main_loop = False
 
@@ -172,7 +179,11 @@ class Gameplay:
         sound.play("area")
 
     def next_level(self):
-        gl.current_level = (gl.current_level + 1) % len(gl.level_names)
+        if gl.current_level + 1 >= len(gl.level_names):
+            gl.game_completed = True  # all levels done - show the ending
+            gl.loop_main_loop = False
+            return
+        gl.current_level += 1
         self.load_level()
 
     def loop_begin(self):
@@ -191,6 +202,8 @@ class Gameplay:
 
     def loop_run(self):
         gl.screen = gl.screen_manager.get_screen()
+        if self.paused:
+            return
         if gl.screen:
             # iterate over a copy - objects may vanish during update
             for active in list(gl.screen.active):
@@ -207,6 +220,8 @@ class Gameplay:
         if gl.debug:
             self.show_map((640 - 32 - 8, 8))
             self.show_info()
+        if self.paused:
+            self.pause_font.draw_centered(gl.window, "pauza", 200)
 
     def show(self):
         """Display the screen."""
@@ -220,6 +235,8 @@ class Gameplay:
         gl.player = pl.PlayerEntity(self.controller)
         gl.checkpoint = ga.ActiveCheckpoint()
         gl.current_level = level
+        gl.game_completed = False
+        self.paused = False
         self.load_level()
 
     def run(self):
@@ -282,6 +299,8 @@ def fast_main():
         gameplay.start()
         gameplay.run()
         gameplay.stop()
+        if gl.game_completed and not gl.quit_requested:
+            title.ending()
     game.quit()
 
 

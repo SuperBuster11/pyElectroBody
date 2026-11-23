@@ -137,6 +137,23 @@ class Entity:
     def get_touch(self):
         return self.sprites[self.frame].touch
 
+    def is_visible(self):
+        return getattr(self, "show", True)
+
+    def is_shootable(self):
+        """Stops player's projectiles."""
+        return self.is_visible() and self.sprites[self.frame].flag("shootable")
+
+    def is_destroyable(self):
+        """Can be destroyed by player's projectiles."""
+        return self.is_visible() and self.sprites[self.frame].flag("destroyable")
+
+    def destroy(self):
+        """Destroyed by player's projectile."""
+        sound.play("xplosion")
+        add_explosion(self.get_position())
+        self.vanish()
+
     def vanish(self):
         """Remove itself from the current screen and the level definition"""
         screen = gl.screen_manager.get_screen()
@@ -375,6 +392,7 @@ class ScreenManager:
         if self.screens:
             gl.init_screen_randoms(screen_number)
             self.current_screen = screen_number
+            self.new_objects = []  # objects spawned on the previous screen
             # changing screen reinitializes its content
             self.screen = da.Screen()
             cs = self.screens[self.current_screen]
@@ -608,6 +626,9 @@ class Rocket(Entity):
     def is_touchable(self):
         return self.reload == 0 and Entity.is_touchable(self)
 
+    def is_visible(self):
+        return self.reload == 0
+
     def get_touch(self):
         return Entity.get_touch(self) if self.reload == 0 else 0
 
@@ -775,6 +796,9 @@ class Explosion(Entity):
     def __init__(self, position):
         Entity.__init__(self, gl.weapons.weapon["EXPLOSION"].anims, position)
 
+    def is_shootable(self):
+        return False
+
     def update(self):
         self.frame += 1
         if self.frame >= len(self.sprites):
@@ -789,10 +813,6 @@ def add_explosion(position):
     gl.screen_manager.add_active(Explosion(XY.from_self(position)))
 
 
-def rects_overlap(entity, other):
-    return entity.get_abs_bbox().colliderect(other.get_abs_bbox())
-
-
 class EnemyShot(Entity):
     """Enemy projectile. Kills the player on contact."""
     deadly = True
@@ -800,6 +820,9 @@ class EnemyShot(Entity):
     def __init__(self, sprite, position, step):
         Entity.__init__(self, [sprite], position)
         self.step = step  # XY move vector per frame
+
+    def is_shootable(self):
+        return False
 
     def update(self):
         self.set_position(self.get_position() + self.step)
@@ -866,6 +889,12 @@ class Enemy(Entity):
 
     def get_touch(self):
         return 0
+
+    def is_shootable(self):
+        return True
+
+    def is_destroyable(self):
+        return True
 
     def display(self):
         anim = self.anims[self.anim]
@@ -960,9 +989,7 @@ class Enemy(Entity):
 
     def hit(self):
         """Hit by player's projectile."""
-        sound.play("xplosion")
-        add_explosion(self.get_position())
-        self.vanish()
+        self.destroy()
 
 
 class EnemyPlatform(Enemy):

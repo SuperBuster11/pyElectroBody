@@ -3,6 +3,8 @@ import sys
 import pygame
 import json
 
+DATA_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
 screen = None
 sprites = []
 font = None
@@ -34,7 +36,7 @@ class SpriteData():
 def load_data(filename):
     global sprites
     global areas
-    set_path = os.path.join(r"C:\Users\Grzegorz\Downloads\pyelectroman-master\data", filename)
+    set_path = os.path.join(DATA_FOLDER, filename)
     params_path = os.path.join(set_path, filename + ".ebs")
     f = open(params_path, "rt")
     data = json.load(f)
@@ -77,7 +79,7 @@ def display_data(info_type):
             img = sprite.img
             if img is not None:
                 x_pos = x * X_GRID + TOP_OFS
-                y_pos = y * Y_GRID + (Y_GRID - 48)/2 + TOP_OFS
+                y_pos = y * Y_GRID + (Y_GRID - 48) // 2 + TOP_OFS
                 screen.blit(img, (x_pos, y_pos))
                 area = pygame.Rect(x_pos, y_pos, 48, 48)
                 areas[snum] = area
@@ -258,7 +260,7 @@ def scan_for_data(data_folder):
                 sets.append(os.path.splitext(file)[0])
 
 def main():
-    scan_for_data(r"data")
+    scan_for_data(DATA_FOLDER)
     init()
     if sets:
         load_data(sets[0])
