@@ -6,6 +6,7 @@ import pygame
 import emglobals as gl
 import emdata as da
 import emsound as sound
+import emvideo as video
 
 # letters sprite set: a-z, Polish letters, digits and a few symbols
 LETTERS = "abcdefghijklmnopqrstuvwxyząćęłńóśź0123456789:"
@@ -55,8 +56,10 @@ class Intro:
     HELP = ["strzałki: ruch i skok",
             "w dół: teleport",
             "spacja: strzał",
-            "p: pauza",
-            "f1: informacje"]
+            "p: pauza"]
+    HELP_VIDEO = ["f11: pełny ekran",
+                  "f10: rozmiar okna",
+                  "f1: informacje"]
 
     def __init__(self):
         self.logo = self.load_logo()
@@ -71,6 +74,8 @@ class Intro:
         self.hero_dir = 1
         self.frame = 0
         self.counter = 0
+        self.mode_info = None
+        self.mode_time = 0
 
     def load_logo(self):
         """Original logo is stored as two tiles in the first level's set."""
@@ -136,11 +141,17 @@ class Intro:
             y += 26
         y += 4
         font = gl.font["normal"]
-        for line in self.HELP:
-            text = font.render(line, True, pygame.Color(160, 160, 160))
-            surface.blit(text, ((surface.get_width() - text.get_width()) // 2, y))
-            y += 18
-        pygame.display.flip()
+        color = pygame.Color(160, 160, 160)
+        for column, lines in ((170, self.HELP), (470, self.HELP_VIDEO)):
+            ly = y
+            for line in lines:
+                text = font.render(line, True, color)
+                surface.blit(text, (column - text.get_width() // 2, ly))
+                ly += 18
+        if self.mode_info and self.counter - self.mode_time < 60:
+            text = font.render(self.mode_info, True, pygame.Color(255, 255, 255))
+            surface.blit(text, ((surface.get_width() - text.get_width()) // 2, 462))
+        video.present()
 
     ENDING = ["gratulacje",
               "",
@@ -159,6 +170,8 @@ class Intro:
                 if event.type == pygame.QUIT:
                     gl.quit_requested = True
                     done = True
+                elif video.handle_event(event):
+                    pass
                 elif event.type == pygame.KEYDOWN and t > 20:
                     done = True
             surface = gl.window
@@ -171,7 +184,7 @@ class Intro:
                 y += 30
             self.draw_floor(surface, 400)
             self.draw_hero(surface, 400 - 2 * gl.SPRITE_Y)
-            pygame.display.flip()
+            video.present()
             sound.update_music()
             t += 1
             clock.tick(20)
@@ -180,6 +193,8 @@ class Intro:
     def run(self):
         clock = pygame.time.Clock()
         self.counter = 0
+        self.mode_info = None
+        self.mode_time = 0
         sound.start_music()
         pygame.event.get()  # forget keys pressed in the game
         result = None
@@ -188,6 +203,10 @@ class Intro:
                 if event.type == pygame.QUIT:
                     gl.quit_requested = True
                     result = False
+                elif video.handle_event(event):
+                    if not video.settings["fullscreen"]:
+                        self.mode_info = video.describe()
+                        self.mode_time = self.counter
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         result = False

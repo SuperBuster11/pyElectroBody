@@ -1,6 +1,6 @@
 # pyelectroman
 
-Port gry **Electro Man** (DOS, 1993) do Pythona 3 + pygame.
+Port gry **Electro Man** (DOS, 1993) do Pythona 3 + pygame. Działa na Windows 32- i 64-bit (oraz Linux/macOS).
 
 ## O grze
 
@@ -49,10 +49,25 @@ jeśli masz stare `pygame`, usuń je poleceniem `pip uninstall pygame`.
 | Spacja | strzał (w menu: start) |
 | P | pauza |
 | Esc | powrót do menu / wyjście |
+| F11 lub Alt+Enter | pełny ekran |
+| F10 | rozmiar okna |
 | F1 | informacje deweloperskie |
 
 Klawisze deweloperskie: `1`–`8` wczytanie poziomu, `Shift+0`–`Shift+5` wybór broni,
 `Ctrl+strzałki` przełączanie ekranów, `Tab` podgląd kolizji.
+
+## Grafika i rozdzielczość
+
+Gra rysuje obraz 640x480 (ekran gry to 13x8 pól po 24 piksele z oryginału, powiększonych
+2 razy) i skaluje go do okna lub ekranu, zachowując proporcje 4:3.
+
+- Okno zawsze otwiera się na środku ekranu. Rozmiary: 640x480, 960x720, 1280x960,
+  1600x1200, 1920x1440, 2240x1680 lub 2560x1920 (dostępne są te, które mieszczą się
+  na pulpicie).
+- Pełny ekran: zawsze w rozdzielczości pulpitu. Na ekranach panoramicznych po bokach
+  są czarne pasy.
+
+Ustawienia zapisują się w `%APPDATA%\pyelectroman\settings.json`.
 
 ## Zasady
 
@@ -86,5 +101,7 @@ Do gry nie są potrzebne. Wymagają Pillow (`pip install pillow`).
 - `convert_levels.py`: poziomy `*.ggc` na `*.ebl`,
 - `convert_sounds.py`: dźwięki `*.u8` na WAV,
 - `display_levels.py`: rysuje mapy całych poziomów do folderu `maps`.
+- `make_icon.py`: tworzy ikonę gry (`data/icon.png` dla okna, `icon.ico` dla pliku .exe)
+  z oryginalnego logo.
 
 `sprite_info.py` to podgląd grafik i ich parametrów (wymaga pygame-ce).

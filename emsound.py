@@ -13,7 +13,7 @@ EFFECTS = ["footstep", "jump", "jumpend", "shoot", "laser", "eshoot",
 # intro music is made of short sampled phrases played one after another
 INTRO_MUSIC = ["ta", "tb", "tc", "td", "te", "tf", "tg", "th", "tj"]
 
-VOLUME = 0.7
+VOLUME = 0.3  # 30%
 
 enabled = False
 sounds = {}

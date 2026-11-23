@@ -5,13 +5,14 @@ from emglobals import XY
 import pygame
 import logging
 import time
+import emvideo as video
 
 
 #noinspection PyArgumentEqualDefault
 def init_display():
+    video.windows_taskbar_id()
     pygame.init()
-    gl.window = pygame.display.set_mode((640, 480), 0, 32)
-    pygame.display.set_caption("Electro Man - Python Version")
+    video.init(notify=lambda text: info_lines.add(text))
     gl.font["xsmall"] = pygame.font.SysFont("tahoma", 8)
     gl.font["small"] = pygame.font.SysFont("tahoma", 10)
     gl.font["normal"] = pygame.font.SysFont("tahoma", 12)
@@ -30,7 +31,7 @@ def clear_screen():
 
 def show():
     info_lines.show()
-    pygame.display.flip()
+    video.present()
 
 
 def message(position, txt, font=None, antialias=False,

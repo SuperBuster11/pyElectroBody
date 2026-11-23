@@ -9,6 +9,7 @@ import emhero as pl
 import emother as ot
 import emsound as sound
 import emintro as intro
+import emvideo as video
 import pygame
 import logging
 import time
@@ -194,6 +195,8 @@ class Gameplay:
             if event.type == pygame.QUIT:
                 gl.loop_main_loop = False
                 gl.quit_requested = True
+            elif video.handle_event(event):
+                pass
             elif event.type == pygame.KEYDOWN:
                 handler = self.key_handlers.get(event.key)
                 if handler:
