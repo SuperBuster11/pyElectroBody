@@ -1,6 +1,6 @@
 # pyelectroman
 
-Port gry **Electro Man** (DOS, 1993) do Pythona 3 + pygame. Działa na Windows 32- i 64-bit (oraz Linux/macOS).
+Port gry **Electro Man** (DOS, 1993) do Pythona 3 + pygame.
 
 ## O grze
 
